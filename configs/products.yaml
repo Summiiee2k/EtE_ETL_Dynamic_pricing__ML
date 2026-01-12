@@ -1,0 +1,21 @@
+products:
+    - name: Milk
+      base_price: 1.5
+      inventory: 20
+      icon: "🥛"
+    - name: Bread
+      base_price: 1.1
+      inventory: 25
+      icon: "🍞"
+    - name: Eggs
+      base_price: 3.45
+      inventory: 21
+      icon: "🥚"
+    - name: Cheese
+      base_price: 6.5
+      inventory: 17
+      icon: "🧀"
+    - name: Meat
+      base_price: 7.67
+      inventory: 15
+      icon: "🥩"
