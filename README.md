@@ -3,7 +3,7 @@
 This project is an end-to-end **MLOps demonstration** of a Dynamic Pricing Engine for a supermarket. It simulates a live retail environment where autonomous "Shopper Bots" enter, browse, and make purchasing decisions based on their hidden budget and the displayed prices
 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-## Update 1(12/01/2026)
+## Update 1(12/01/26)
 We have hardcoded the logic in the simulation.py file with some products and their prices and inventory. For now we are going to use this hardcoded data to simulate the dynamic pricing. In the later phase we are going to use the ETL pipeline to get the data and introduce an ML model to predict the prices dynamically
 
 ## Tech Stack
