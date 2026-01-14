@@ -5,6 +5,7 @@ import os
 import datetime
 import joblib
 import faker
+import importlib
 
 fake = faker.Faker()
 
@@ -16,7 +17,7 @@ class Product:
         self.inventory = inventory
         self.icon = icon
         self.sold_count = 0
-        self.revenue = 0 # for rack total revenue of the Market, not for each product. This will show me how the prices are effecting the revenue 
+        self.revenue = 0.0
 
     def update_price(self, new_price):
         self.price = round(new_price, 2)
@@ -24,15 +25,12 @@ class Product:
 class Shopper:
     def __init__(self):
         self.name = fake.first_name()
-        # Personality: Frugal (<1.0) vs Wealthy (>1.0)
         self.budget_multiplier = np.random.normal(1.0, 0.25)
         self.type = "Frugal" if self.budget_multiplier < 0.9 else "Wealthy" if self.budget_multiplier > 1.1 else "Average"
 
     def decide(self, product):
-        # The internal valuation
         perceived_value = product.base_price * self.budget_multiplier
         
-        # Decision Logic
         if product.inventory <= 0:
             return False, "Stock Empty"
         
@@ -47,14 +45,16 @@ class Market:
         self.products = [Product(**p) for p in products_config]
         self.logs = []
         
-        # Load Model
         self.model = None
-        model_path = "A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\predictor2.pkl"
-        if os.path.exists(model_path):
-            self.model = joblib.load(model_path)
-            print(f"AI Model Loaded from {model_path}")
+        self.model_features = None # Store the expected columns
+        
+        if os.path.exists("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\predictor4.pkl"):
+            self.model = joblib.load("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\predictor4.pkl")
+            # Load the feature list so we match the training data exactly
+            if os.path.exists("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\model_features.pkl"):
+                self.model_features = joblib.load("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\model_features.pkl")
+                print("🧠 AI Model & Features Loaded!")
 
-        # Data Logging Setup
         self.csv_path = "data/transactions2.csv"
         if not os.path.exists("data"):
             os.makedirs("data")
@@ -80,65 +80,65 @@ class Market:
             df.to_csv(self.csv_path, mode='a', header=False, index=False)
 
     def get_optimal_price(self, product):
-        """AI Logic: Returns (Best Price, Probability, Expected Revenue)"""
-        if not self.model:
+        if not self.model or not self.model_features:
             return product.base_price, 0, 0
         
         # 1. Generate Candidates
         candidates = np.linspace(product.base_price * 0.7, product.base_price * 1.6, 20)
         
-        # 2. Predict
+        # 2. Create Input Data Frame
+        # We start with the basic columns
         input_df = pd.DataFrame({
             'price_offered': candidates,
             'inventory_level': [product.inventory] * 20
         })
-        buy_probs = self.model.predict_proba(input_df.values)[:, 1]
         
-        # 3. Optimize Revenue
+        # 3. Add One-Hot Encoding Columns
+        # We need to set 'product_name_Milk' = 1, and all others to 0
+        for feature in self.model_features:
+            if feature not in ['price_offered', 'inventory_level']:
+                # Check if this feature matches the current product
+                # e.g. if feature is 'product_name_Milk' and product.name is 'Milk' -> 1
+                if feature == f"product_name_{product.name}":
+                    input_df[feature] = 1
+                else:
+                    input_df[feature] = 0
+        
+        # Reorder columns to match training exactly
+        input_df = input_df[self.model_features]
+        
+        # 4. Predict
+        buy_probs = self.model.predict_proba(input_df)[:, 1]
         expected_revenues = candidates * buy_probs
         best_index = np.argmax(expected_revenues)
         
         return candidates[best_index], buy_probs[best_index], expected_revenues[best_index]
 
     def simulate_step(self):
-        # --- 1. SHOPPER EVENT ---
+        # 1. Shopper Event
         if random.random() < 0.7: 
             shopper = Shopper()
             product = random.choice(self.products)
             decision, reason = shopper.decide(product)
-            
-            # Save for Training
             self.save_transaction(product, shopper, decision)
 
             if decision:
                 product.inventory -= 1
                 product.sold_count += 1
                 product.revenue += product.price
-                self.log(f" **SALE:** {shopper.name} ({shopper.type}) bought {product.icon} **{product.name}** for ${product.price:.2f}.")
+                self.log(f"💰 **SALE:** {shopper.name} ({shopper.type}) bought {product.icon} **{product.name}** for ${product.price:.2f}.")
             else:
-                # Log why they failed (QOL Improvement)
                 if reason == "Stock Empty":
-                    self.log(f" **LOST SALE:** {shopper.name} wanted {product.name}, but it's out of stock!")
+                    self.log(f"⚠️ **LOST SALE:** {shopper.name} wanted {product.name}, but it's out of stock!")
                 else:
                     self.log(f"🚶 **WALK:** {shopper.name} ({shopper.type}) left. {product.name} at ${product.price:.2f} was {reason}.")
 
-        # --- 2. AI RE-PRICING EVENT ---
-        # Trigger slightly less often so logs aren't spammy
+        # 2. AI Re-pricing
         if random.random() < 0.15:
-            # Pick one random product to adjust (instead of all at once)
             p = random.choice(self.products)
-            
             new_price, prob, exp_rev = self.get_optimal_price(p)
             
-            # Only change if the price difference is significant (> $0.10)
             if abs(new_price - p.price) > 0.10:
                 direction = "📈 Raising" if new_price > p.price else "📉 Dropping"
-                
-                # THE "WHY" LOG
-                self.log(
-                    f" **AI:** {direction} {p.name} to **${new_price:.2f}**. "
-                    f"Inventory: {p.inventory}. Predicted Buy Chance: {int(prob*100)}%. "
-                    f"Exp. Revenue: ${exp_rev:.2f}"
-                )
-                
+                self.log(f"🤖 **AI:** {direction} {p.name} to **${new_price:.2f}**. Chance: {int(prob*100)}%. Exp.Rev: ${exp_rev:.2f}")
                 p.update_price(new_price)

@@ -2,7 +2,7 @@ import streamlit as st
 import time
 import yaml
 import pandas as pd
-from src.simulation2 import Market
+from src.simulation import Market
 
 # --- CONFIG ---
 st.set_page_config(page_title="Dynamic Pricing Supermarket", layout="wide")

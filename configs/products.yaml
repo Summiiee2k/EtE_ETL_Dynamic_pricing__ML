@@ -8,7 +8,7 @@ products:
       inventory: 100
       icon: "🍞"
     - name: Eggs
-      base_price: 3.45
+      base_price: 1.00
       inventory: 100
       icon: "🥚"
     - name: Cheese
