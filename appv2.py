@@ -17,13 +17,6 @@ with open("configs/products.yaml", "r", encoding="utf-8") as file:
 if "market" not in st.session_state:
     st.session_state.market = Market(config["products"])
 
-
-if not hasattr(st.session_state.market.products[0], 'revenue'):
-    print("⚠️ ALERT: Old Product class detected! Forcing a hard reset...")
-    del st.session_state.market
-    st.session_state.market = Market(config["products"])
-    st.rerun()
-
 market = st.session_state.market
 
 # --- UI HEADER ---
@@ -72,7 +65,7 @@ def render_metrics():
     total_rev = sum(p.revenue for p in market.products)
     total_sold = sum(p.sold_count for p in market.products)
     
-    metric_rev.metric("Total Revenue", f"${total_rev:,.2f}", delta="Live")
+    metric_rev.metric("Total Revenue", f"€{total_rev:,.2f}", delta="Live")
     metric_sold.metric("Units Sold", f"{total_sold}", delta="Count")
     metric_traffic.metric("Market Status", "Open" if run_simulation else "Paused")
 
@@ -86,11 +79,11 @@ def render_shelf():
                 inv_color = "off" if p.inventory > 20 else "inverse"
                 st.metric(
                     label=f"{p.icon} {p.name}",
-                    value=f"${p.price:.2f}",
+                    value=f"€{p.price:.2f}",
                     delta=f"{p.inventory} left",
                     delta_color=inv_color
                 )
-                st.caption(f"Rev: ${p.revenue:.2f}")
+                st.caption(f"Rev: €{p.revenue:.2f}")
                 st.progress(min(p.inventory / 100, 1.0))
 
 def render_logs():
@@ -125,15 +118,13 @@ def render_logs():
 def render_charts():
     # Check if file exists
     if not os.path.exists(market.csv_path):
-        chart_container.info("⏳ Waiting for simulation data... (File not created yet)")
+        chart_container.info("Waiting for simulation data... (File not created yet)")
         return
-
-    try:
         df = pd.read_csv(market.csv_path)
         
         # Check if data is empty
         if len(df) < 5: 
-            chart_container.info(f"⏳ Gathering data... ({len(df)}/5 rows)")
+            chart_container.info(f"Gathering data... ({len(df)}/5 rows)")
             return
         
         # FIX: Ensure timestamp is actually a date (Altair is strict about this)
@@ -149,7 +140,7 @@ def render_charts():
         
         # Price Line (Green)
         line_price = base.mark_line(color='#00cc00', strokeWidth=2).encode(
-            y=alt.Y('price_offered', title='Price ($)', scale=alt.Scale(zero=False)),
+            y=alt.Y('price_offered', title='Price (€)', scale=alt.Scale(zero=False)),
             tooltip=['product_name', 'price_offered', 'inventory_level']
         )
         
@@ -165,9 +156,7 @@ def render_charts():
         
         chart_container.altair_chart(c, use_container_width=True)
             
-    except Exception as e:
-        # <--- THIS IS THE DEBUGGER
-        chart_container.error(f"❌ Chart Error: {str(e)}")
+    
 
 
 

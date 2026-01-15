@@ -46,11 +46,10 @@ class Market:
         self.logs = []
         
         self.model = None
-        self.model_features = None # Store the expected columns
+        self.model_features = None 
         
         if os.path.exists("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\predictor4.pkl"):
             self.model = joblib.load("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\predictor4.pkl")
-            # Load the feature list so we match the training data exactly
             if os.path.exists("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\model_features.pkl"):
                 self.model_features = joblib.load("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\model_features.pkl")
                 print("🧠 AI Model & Features Loaded!")
@@ -87,18 +86,15 @@ class Market:
         candidates = np.linspace(product.base_price * 0.7, product.base_price * 1.6, 20)
         
         # 2. Create Input Data Frame
-        # We start with the basic columns
         input_df = pd.DataFrame({
             'price_offered': candidates,
             'inventory_level': [product.inventory] * 20
         })
         
         # 3. Add One-Hot Encoding Columns
-        # We need to set 'product_name_Milk' = 1, and all others to 0
         for feature in self.model_features:
             if feature not in ['price_offered', 'inventory_level']:
-                # Check if this feature matches the current product
-                # e.g. if feature is 'product_name_Milk' and product.name is 'Milk' -> 1
+                
                 if feature == f"product_name_{product.name}":
                     input_df[feature] = 1
                 else:
@@ -126,7 +122,7 @@ class Market:
                 product.inventory -= 1
                 product.sold_count += 1
                 product.revenue += product.price
-                self.log(f"💰 **SALE:** {shopper.name} ({shopper.type}) bought {product.icon} **{product.name}** for ${product.price:.2f}.")
+                self.log(f"💰 **SALE:** {shopper.name} ({shopper.type}) bought {product.icon} **{product.name}** for €{product.price:.2f}.")
             else:
                 if reason == "Stock Empty":
                     self.log(f"⚠️ **LOST SALE:** {shopper.name} wanted {product.name}, but it's out of stock!")
@@ -140,5 +136,5 @@ class Market:
             
             if abs(new_price - p.price) > 0.10:
                 direction = "📈 Raising" if new_price > p.price else "📉 Dropping"
-                self.log(f"🤖 **AI:** {direction} {p.name} to **${new_price:.2f}**. Chance: {int(prob*100)}%. Exp.Rev: ${exp_rev:.2f}")
-                p.update_price(new_price)
+                self.log(f"🤖 **AI:** {direction} {p.name} to **€{new_price:.2f}**. Chance: {int(prob*100)}%. Exp.Rev: €{exp_rev:.2f}")
+                p.update_price(new_price)   
