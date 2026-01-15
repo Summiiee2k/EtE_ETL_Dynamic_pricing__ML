@@ -6,6 +6,7 @@ import datetime
 import joblib
 import faker
 import importlib
+import requests
 
 fake = faker.Faker()
 
@@ -52,7 +53,7 @@ class Market:
             self.model = joblib.load("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\predictor4.pkl")
             if os.path.exists("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\model_features.pkl"):
                 self.model_features = joblib.load("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\model_features.pkl")
-                print("🧠 AI Model & Features Loaded!")
+                print("AI Model & Features Loaded via FAST API ")
 
         self.csv_path = "data/transactions2.csv"
         if not os.path.exists("data"):
@@ -79,38 +80,39 @@ class Market:
             df.to_csv(self.csv_path, mode='a', header=False, index=False)
 
     def get_optimal_price(self, product):
-        if not self.model or not self.model_features:
-            return product.base_price, 0, 0
+        """Phase 3 Client: Asks the API for the price"""
         
-        # 1. Generate Candidates
-        candidates = np.linspace(product.base_price * 0.7, product.base_price * 1.6, 20)
-        
-        # 2. Create Input Data Frame
-        input_df = pd.DataFrame({
-            'price_offered': candidates,
-            'inventory_level': [product.inventory] * 20
-        })
-        
-        # 3. Add One-Hot Encoding Columns
-        for feature in self.model_features:
-            if feature not in ['price_offered', 'inventory_level']:
+        # Define the API Payload
+        payload = {
+            "product_name": product.name,
+            "base_price": product.base_price,
+            "inventory_level": product.inventory
+        }
+        try:
+            # Send Request
+            response = requests.post("http://127.0.0.1:8000/predict", json=payload, timeout=2.0)
+            
+            if response.status_code == 200:
+                data = response.json()
                 
-                if feature == f"product_name_{product.name}":
-                    input_df[feature] = 1
+                # --- DEBUG PRINT: START ---
+                # Checking if the API is actually "Thinking" or just acting like a dumb ass bitch
+                if data.get("model_active") is False:
+                    print(f" API is in DUMB MODE (Model not loaded). returning base price.")
                 else:
-                    input_df[feature] = 0
-        
-        # Reorder columns to match training exactly
-        input_df = input_df[self.model_features]
-        
-        # 4. Predict
-        buy_probs = self.model.predict_proba(input_df)[:, 1]
-        expected_revenues = candidates * buy_probs
-        best_index = np.argmax(expected_revenues)
-        
-        return candidates[best_index], buy_probs[best_index], expected_revenues[best_index]
+                    print(f" API Response for {product.name}: ${data['optimal_price']} (Prob: {data['probability']:.2f})")
+                # --- DEBUG PRINT: END ---
 
-    def simulate_step(self):
+                return data["optimal_price"], data["probability"], data["expected_revenue"]
+            else:
+                print(f" API Error: {response.status_code}")
+                return product.base_price, 0, 0
+        
+        except Exception as e:
+            print(f" API Connection Error: {e}")
+            return product.base_price, 0, 0
+
+    def simulate_step(self):    
         # 1. Shopper Event
         if random.random() < 0.7: 
             shopper = Shopper()
