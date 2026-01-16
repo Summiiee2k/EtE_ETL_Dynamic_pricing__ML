@@ -71,7 +71,7 @@ def render_metrics():
 
 def render_shelf():
     with shelf_container.container():
-        # Display products in rows of 3
+        
         cols = st.columns(3)
         for i, p in enumerate(market.products):
             col_idx = i % 3

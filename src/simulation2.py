@@ -27,7 +27,7 @@ class Shopper:
     def __init__(self):
         self.name = fake.first_name()
         self.budget_multiplier = np.random.normal(1.0, 0.25)
-        self.type = "Frugal" if self.budget_multiplier < 0.9 else "Wealthy" if self.budget_multiplier > 1.1 else "Average"
+        self.type = "Poor" if self.budget_multiplier < 0.9 else "Wealthy" if self.budget_multiplier > 1.1 else "Average"
 
     def decide(self, product):
         perceived_value = product.base_price * self.budget_multiplier
