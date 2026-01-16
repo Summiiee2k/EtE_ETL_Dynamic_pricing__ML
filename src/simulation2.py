@@ -8,7 +8,41 @@ import faker
 import importlib
 import requests
 
+from collections import deque
+
 fake = faker.Faker()
+
+class DriftDetector:
+    """The Observer: Tracks model performance in real-time"""
+    def __init__(self, window_size=50, threshold=0.50):
+        self.window_size = window_size
+        self.threshold = threshold
+        self.history = deque(maxlen=window_size) # Auto-removes old items
+        self.drift_detected = False
+
+    def add_event(self, predicted_prob, actual_outcome):
+        # We consider a "Prediction" to be Positive if prob > 0.5
+        predicted_outcome = 1 if predicted_prob > 0.5 else 0
+        
+        # Was the model correct? (True/False)
+        is_correct = (predicted_outcome == actual_outcome)
+        self.history.append(is_correct)
+
+    def check_health(self):
+        if len(self.history) < 10:
+            return 1.0, False # Too early to tell, assume perfect health
+        
+        # Calculate Accuracy (Sum of True / Total)
+        accuracy = sum(self.history) / len(self.history)
+        
+        # Check Drift
+        if accuracy < self.threshold:
+            self.drift_detected = True
+        else:
+            self.drift_detected = False
+            
+        return accuracy, self.drift_detected
+
 
 class Product:
     def __init__(self, name, base_price, inventory, icon):
@@ -45,20 +79,12 @@ class Market:
     def __init__(self, products_config):
         self.products = [Product(**p) for p in products_config]
         self.logs = []
-        
-        self.model = None
-        self.model_features = None 
-        
-        if os.path.exists("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\predictor4.pkl"):
-            self.model = joblib.load("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\predictor4.pkl")
-            if os.path.exists("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\model_features.pkl"):
-                self.model_features = joblib.load("A:\\study\\projects\\EtE_ETL_Dynamic_pricing__ML\\Notebook\\models\\model_features.pkl")
-                print("AI Model & Features Loaded via FAST API ")
-
         self.csv_path = "data/transactions2.csv"
+        self.drift_detector = DriftDetector()
+        self.current_accuracy = 1.0
+        
         if not os.path.exists("data"):
             os.makedirs("data")
-
     def log(self, message):
         self.logs.insert(0, message) 
         if len(self.logs) > 50:
@@ -112,24 +138,38 @@ class Market:
             print(f" API Connection Error: {e}")
             return product.base_price, 0, 0
 
-    def simulate_step(self):    
+    def simulate_step(self):
         # 1. Shopper Event
         if random.random() < 0.7: 
             shopper = Shopper()
             product = random.choice(self.products)
+            
+            # BEFORE DECISION: Ask API what it *thinks* will happen
+            # We call the API just to get the 'probability' for the Drift Detector
+            # (In a real app, we would cache this from the pricing step)
+            _, predicted_prob, _ = self.get_optimal_price(product)
+            
+            # REALITY: Shopper decides
             decision, reason = shopper.decide(product)
             self.save_transaction(product, shopper, decision)
+            
+            # --- NEW: FEED THE OBSERVER ---
+            self.drift_detector.add_event(predicted_prob, 1 if decision else 0)
+            acc, drift = self.drift_detector.check_health()
+            self.current_accuracy = acc # Save for UI
+
+            # LOG DRIFT
+            if drift:
+                 self.log(f" **DRIFT DETECTED!** Model Accuracy dropped to {int(acc*100)}%")
 
             if decision:
                 product.inventory -= 1
                 product.sold_count += 1
                 product.revenue += product.price
-                self.log(f"💰 **SALE:** {shopper.name} ({shopper.type}) bought {product.icon} **{product.name}** for €{product.price:.2f}.")
+                self.log(f"💰 **SALE:** {shopper.name} bought {product.name} (${product.price}).")
             else:
-                if reason == "Stock Empty":
-                    self.log(f"⚠️ **LOST SALE:** {shopper.name} wanted {product.name}, but it's out of stock!")
-                else:
-                    self.log(f"🚶 **WALK:** {shopper.name} ({shopper.type}) left. {product.name} at ${product.price:.2f} was {reason}.")
+                if reason != "Stock Empty":
+                    self.log(f"🚶 **WALK:** {shopper.name} left. {product.name} too high.")
 
         # 2. AI Re-pricing
         if random.random() < 0.15:
