@@ -62,3 +62,33 @@ Replaced hardcoded logic with a Random Forest Classifier that predicts purchase 
 * **Behavior:** The AI successfully finds the "price ceiling" for each product—raising prices when stock is low (Scarcity Principle) and lowering them to clear excess inventory.
 
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+## Update 3(17/01/26): Auto-Retraining Implementation
+Transition from a manual script to an autonomous Microservices Architecture that detects failure and repairs itself.
+
+### Key Features Added
+1.  **The Server (FastAPI):**
+    * Moved the ML inference logic to a dedicated API (`src/api.py`) running on Port 8000.
+    * **Benefit:** The simulation (Streamlit) can no longer crash the model, and the model can be updated without restarting the app.
+2.  **The Client (Simulation):**
+    * The app now sends HTTP requests (`POST /predict`) to get pricing advice.
+    * Includes a **Circuit Breaker**: If the API is down or slow, it falls back to base prices instead of crashing.
+3. **The Observer (Drift Detection):**
+    * **Mechanism:** Implemented a "Sliding Window" algorithm that tracks the last 50 decisions.
+    * **Logic:** compares `Predicted_Prob > 0.5` vs `Actual_Purchase`.
+    * **Trigger:** If Real-Time Accuracy drops below **50%** (worse than a coin flip), it flags a **Drift Event**.
+
+4. **The Healer (Automated Retraining):**
+    * **Workflow:**
+        1.  Simulation detects Drift → Hits `POST /retrain` endpoint.
+        2.  API spawns a **Background Task** (Async).
+        3.  System loads the latest `transactions.csv`, trains a Challenger Model, and validates performance.
+        4.  **Hot-Swap:** The API reloads the new `.pkl` file into memory instantly.
+    * **Result:** The system adapts to changing customer behavior automatically without human intervention
+
+
+### Tech Stack Added
+* **FastAPI & Uvicorn:** High-performance Async API.
+* **Pydantic:** Data validation to prevent "Garbage In, Garbage Out."
+* **BackgroundTasks:** For non-blocking retraining operations.
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
