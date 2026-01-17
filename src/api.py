@@ -1,11 +1,11 @@
 import pandas as pd
 import joblib
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import os
-
+from src.trainer import run_retraining
 
 # the standard contract for validating the input data
 class PricingRequest(BaseModel):
@@ -25,6 +25,17 @@ model_state = {
     "model": None,
     "features": None
 }
+
+# --- NEW: BACKGROUND RETRAINER ---
+def background_retrain():
+    print("Background Task: Retraining initiated...")
+    success = run_retraining()
+    if success:
+        print("Reloading Model in API...")
+        load_model() # This refreshes the Global Variable
+        print("System Healed! New model is live.")
+    else:
+        print("Retraining failed (insufficient data?)")
 
 # lifespan, it runs once when we start the server
 @asynccontextmanager
@@ -47,6 +58,12 @@ def load_model():
 
 # Initialze the APP
 app = FastAPI(lifespan=lifespan)
+@app.post("/retrain")
+def trigger_retrain(background_tasks: BackgroundTasks):
+    # We don't wait for training to finish. We return "OK" immediately.
+    background_tasks.add_task(background_retrain)
+    return {"status": "Retraining started in background"}
+
 
 @app.get("/")
 def health_check():
@@ -102,6 +119,7 @@ def predict_price(request: PricingRequest):
     except Exception as e:
         print(f"Prediction Error: {e}")
         raise HTTPException(status_code=500, detail="Model prediction failed")
+
 
 # --- AUTO-RELOAD ENDPOINT (For Phase 3B) ---
 @app.post("/reload")

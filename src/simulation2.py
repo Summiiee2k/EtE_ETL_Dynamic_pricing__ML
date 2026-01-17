@@ -82,6 +82,7 @@ class Market:
         self.csv_path = "data/transactions2.csv"
         self.drift_detector = DriftDetector()
         self.current_accuracy = 1.0
+        self.last_retrain_time = datetime.datetime.min
         
         if not os.path.exists("data"):
             os.makedirs("data")
@@ -137,6 +138,23 @@ class Market:
         except Exception as e:
             print(f" API Connection Error: {e}")
             return product.base_price, 0, 0
+    
+
+    def trigger_healing(self):
+        # Cooldown check: Only retrain once every 60 seconds
+        now = datetime.datetime.now()
+        if (now - self.last_retrain_time).total_seconds() < 60:
+            return
+
+        print("DRIFT DETECTED! Requesting Auto-Retrain...")
+        try:
+            requests.post("http://127.0.0.1:8000/retrain", timeout=1.0)
+            self.last_retrain_time = now
+            self.log("SYSTEM: Auto-Retraining triggered!")
+            # Reset detector so we don't panic immediately again
+            self.drift_detector.history.clear() 
+        except:
+            print("Failed to contact API for retraining.")
 
     def simulate_step(self):
         # 1. Shopper Event
@@ -161,6 +179,7 @@ class Market:
             # LOG DRIFT
             if drift:
                  self.log(f" **DRIFT DETECTED!** Model Accuracy dropped to {int(acc*100)}%")
+                 self.trigger_healing()
 
             if decision:
                 product.inventory -= 1
