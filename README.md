@@ -92,3 +92,19 @@ Transition from a manual script to an autonomous Microservices Architecture that
 * **Pydantic:** Data validation to prevent "Garbage In, Garbage Out."
 * **BackgroundTasks:** For non-blocking retraining operations.
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+## Future Updates(soon...)
+1. Add more products
+2. Add more shopper types
+3. Add more Product complexity(e.g. organic, premium, expirary date, shelf life, etc.)
+4. Add more shopper complexity(e.g. budget, impulsive, loyal, desperation etc.)
+5. Add more metrics
+6. Add more visualizations
+7. Add more deployment options
+8. Add more monitoring options
+9. Add more security options
+10. Add more performance options
+11. Add more scalability options
+12. Add more maintainability options
+13. Add more extensibility options
+14. Add more flexibility options
